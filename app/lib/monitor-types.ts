@@ -13,7 +13,7 @@ export interface SnapshotRow {
   competition: number | null; // C
   name: string | null;
   keywords: string[];
-  monthlyVolume: number | null; // 월 검색량 (추후 외부 API 연동)
+  monthlyVolume: number | null; // 월 검색량 (네이버 검색광고 API, PC+모바일 합산)
 }
 
 export interface RegistrationRow {

@@ -349,6 +349,11 @@ function RegistrationRowCard({
           {latest?.name ? `${latest.name}(${reg.placeId})` : "업체명 미확인"}
         </span>
 
+        {/* 월 검색량 + 경쟁 업체수 */}
+        <span className="text-xs text-gray-500">
+          월 {latest?.monthlyVolume ?? "-"}건 업체 {latest?.total ?? "-"}개
+        </span>
+
         {/* 대표키워드 */}
         <div className="hidden flex-wrap gap-1 md:flex">
           {(latest?.keywords ?? []).slice(0, 3).map((kw) => (
@@ -426,6 +431,9 @@ function HistoryCell({
           </p>
           <p className="text-gray-500">
             블 {snap.blogReview ?? "-"} · 방 {snap.visitorReview ?? "-"}
+          </p>
+          <p className="text-gray-500">
+            월 {snap.monthlyVolume ?? "-"}건 · 업체 {snap.total ?? "-"}개
           </p>
           <p className="pt-0.5 font-mono text-[10px] text-blue-600">
             <span className="mr-1 font-sans font-semibold">N1</span>

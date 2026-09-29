@@ -1,91 +1,68 @@
-// 플레이스 검색 API 호출 + 순차 페이지 조회 로직 (서버 전용)
+// 플레이스 순위 조회 + 대표키워드 추출 로직 (서버 전용)
+// diccmain 외부 API(N지수/경쟁강도 C 제공)가 막혀서, map.naver.com 브라우저 크롤링(place-crawler.ts)으로
+// 순위만 가져오는 방식으로 전환. N지수/경쟁강도는 이 방식으로는 얻을 수 없어 제외한다(대표님 확인, 2026-09-29).
 
-const UPSTREAM = "https://place.diccmain.workers.dev/api";
-const MAX_PAGE = 3; // 최대 90위까지 (page 1~3, 페이지당 30개)
-export const DEFAULT_C = 0.1868;
+import { crawlPlaceRank, type CrawledPlace } from "./place-crawler";
 
-export interface PlaceItem {
-  rank: number;
-  id: string;
-  name: string;
-  category: string;
-  n0: number;
-  n1: number;
-  n2: number;
-  n3: number;
-  blogReview: number;
-  textReview: number;
-  rcptReview: number;
-  reviewScore: number | null;
+export interface PlaceItem extends CrawledPlace {
   keywords: string[];
-}
-
-interface UpstreamResponse {
-  keyword: string;
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-  count: number;
-  C: number;
-  items: PlaceItem[];
 }
 
 export interface AnalyzeResult {
   keyword: string;
   total: number;
-  totalPages: number;
-  competition: number; // C
-  defaultC: number;
-  graphItems: PlaceItem[]; // 상위 10개 — 그래프용
   top10: PlaceItem[]; // 상위 10개 (대표키워드 포함)
   myPlace: PlaceItem | null; // 입력한 플레이스 id 매칭 결과
-  searchedPages: number; // 실제 조회한 페이지 수
+  searchedCount: number; // 실제 조회한 결과 수(광고 제외)
 }
 
-async function fetchPage(keyword: string, page: number): Promise<UpstreamResponse> {
-  const url = `${UPSTREAM}?q=${encodeURIComponent(keyword)}&page=${page}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`upstream ${res.status} (page ${page})`);
+async function fetchRepresentativeKeywords(placeId: string): Promise<string[]> {
+  try {
+    const res = await fetch(`https://pcmap.place.naver.com/restaurant/${placeId}/home`, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+      },
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const match = html.match(/"keywordList":(\[[^\]]*\])/);
+    if (!match) return [];
+    return JSON.parse(match[1]) as string[];
+  } catch {
+    return [];
   }
-  return (await res.json()) as UpstreamResponse;
 }
 
 export async function analyzePlace(
   keyword: string,
   placeId: string | null
 ): Promise<AnalyzeResult> {
-  // 1페이지 조회 (C, total 확보)
-  const first = await fetchPage(keyword, 1);
-  const collected: PlaceItem[] = [...first.items];
-  let searchedPages = 1;
-  const totalPages = first.totalPages;
+  const crawled = await crawlPlaceRank(keyword);
 
-  const findMine = () =>
-    placeId ? collected.find((it) => it.id === placeId) ?? null : null;
+  const top10Raw = crawled.slice(0, 10);
+  const myPlaceRaw = placeId ? crawled.find((it) => it.id === placeId) ?? null : null;
 
-  // 내 플레이스를 못 찾으면 3페이지(90위)까지 순차 조회
-  for (let page = 2; page <= MAX_PAGE; page++) {
-    if (page > totalPages) break;
-    const needForSearch = placeId !== null && findMine() === null;
-    if (!needForSearch) break;
+  // 대표키워드는 상위 10개 + 내 플레이스(순위권 밖이어도)에 대해서만 조회
+  const idsNeedingKeywords = new Set(top10Raw.map((it) => it.id));
+  if (myPlaceRaw) idsNeedingKeywords.add(myPlaceRaw.id);
 
-    const next = await fetchPage(keyword, page);
-    collected.push(...next.items);
-    searchedPages = page;
-    if (findMine() !== null) break;
-  }
+  const keywordEntries = await Promise.all(
+    Array.from(idsNeedingKeywords).map(async (id) => [id, await fetchRepresentativeKeywords(id)] as const)
+  );
+  const keywordMap = new Map(keywordEntries);
+
+  const attachKeywords = (it: CrawledPlace): PlaceItem => ({
+    ...it,
+    keywords: keywordMap.get(it.id) ?? [],
+  });
 
   return {
-    keyword: first.keyword,
-    total: first.total,
-    totalPages: first.totalPages,
-    competition: first.C,
-    defaultC: DEFAULT_C,
-    graphItems: collected.slice(0, 10),
-    top10: collected.slice(0, 10),
-    myPlace: findMine(),
-    searchedPages,
+    keyword,
+    total: crawled.length,
+    top10: top10Raw.map(attachKeywords),
+    myPlace: myPlaceRaw ? attachKeywords(myPlaceRaw) : null,
+    searchedCount: crawled.length,
   };
 }

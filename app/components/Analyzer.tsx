@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import IndexChart from "./IndexChart";
 import type { AnalyzeResult } from "../lib/place";
 
 export default function Analyzer() {
@@ -37,7 +36,7 @@ export default function Analyzer() {
   return (
     <div>
       <p className="mb-6 text-sm text-gray-500">
-        키워드와 플레이스 ID로 순위, N지수, 경쟁강도(C)를 분석합니다.
+        키워드와 플레이스 ID로 순위와 대표키워드를 분석합니다.
       </p>
 
       <form
@@ -89,13 +88,10 @@ export default function Analyzer() {
 }
 
 function Results({ data, placeId }: { data: AnalyzeResult; placeId: string }) {
-  const isGolden = data.competition < data.defaultC;
-
   return (
     <div className="space-y-6">
       {/* 요약 카드 */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {/* 내 플레이스 순위 */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card title="내 플레이스 순위">
           {placeId ? (
             data.myPlace ? (
@@ -110,10 +106,7 @@ function Results({ data, placeId }: { data: AnalyzeResult; placeId: string }) {
               </div>
             ) : (
               <p className="text-sm font-medium text-gray-500">
-                90위 내에 없음
-                <span className="block text-xs text-gray-400">
-                  (page 1~{data.searchedPages} 조회)
-                </span>
+                순위권 밖 (상위 {data.searchedCount}개 중 없음)
               </p>
             )
           ) : (
@@ -121,61 +114,22 @@ function Results({ data, placeId }: { data: AnalyzeResult; placeId: string }) {
           )}
         </Card>
 
-        {/* 내 플레이스 N지수 */}
-        <Card title="내 플레이스 N지수">
-          {data.myPlace ? (
-            <div className="space-y-1 text-sm">
-              <IndexRow label="n1" value={data.myPlace.n1} color="text-emerald-600" />
-              <IndexRow label="n2" value={data.myPlace.n2} color="text-sky-600" />
-              <IndexRow label="n3" value={data.myPlace.n3} color="text-violet-600" />
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400">—</p>
-          )}
-        </Card>
-
-        {/* 경쟁강도 C */}
-        <Card title="경쟁강도 (C)">
-          <p
-            className={`text-3xl font-bold ${
-              isGolden ? "text-emerald-600" : "text-red-500"
-            }`}
-          >
-            {data.competition.toFixed(6)}
+        <Card title="검색 결과 총 업체 수">
+          <p className="text-3xl font-bold text-gray-900">
+            {data.total.toLocaleString()}
           </p>
-          <p className="mt-1 text-xs">
-            <span
-              className={`inline-block rounded-full px-2 py-0.5 font-semibold ${
-                isGolden
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-red-50 text-red-600"
-              }`}
-            >
-              {isGolden ? "🟢 황금 키워드 (진입 유리)" : "🔴 경쟁 치열 (진입 어려움)"}
-            </span>
-          </p>
-          <p className="mt-2 text-xs text-gray-400">
-            기준값 {data.defaultC} · 낮을수록 유리 · 총 {data.total.toLocaleString()}개
-          </p>
+          <p className="mt-1 text-xs text-gray-400">광고 제외, 오가닉 결과 기준</p>
         </Card>
       </div>
 
-      {/* 그래프 */}
+      {/* 상위 10개 대표키워드 */}
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="text-base font-semibold text-gray-900">
-            상위 노출 플레이스 N지수 (상위 {data.graphItems.length}개)
+            상위 10개 플레이스 · 대표키워드
           </h2>
           <span className="text-xs text-gray-400">키워드: {data.keyword}</span>
         </div>
-        <IndexChart items={data.graphItems} myRank={data.myPlace?.rank ?? null} />
-      </section>
-
-      {/* 상위 10개 대표키워드 */}
-      <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <h2 className="mb-4 text-base font-semibold text-gray-900">
-          상위 10개 플레이스 대표키워드
-        </h2>
         <div className="space-y-3">
           {data.top10.map((item) => (
             <div
@@ -218,23 +172,6 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
         {title}
       </p>
       {children}
-    </div>
-  );
-}
-
-function IndexRow({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-gray-500">{label}</span>
-      <span className={`font-semibold ${color}`}>{value.toFixed(6)}</span>
     </div>
   );
 }
